@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle - Alimentador de Pet</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"/>
+    <style>
+        body { padding-top: 2rem; padding-bottom: 2rem; }
+        .container { max-width: 600px; }
+        button { width: 100%; margin-bottom: 0.5rem; cursor: pointer; }
+        #status-racao { font-weight: bold; color: #00bcd4; }
+        .loader {
+            display: none; margin-left: 10px; border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db; border-radius: 50%;
+            width: 24px; height: 24px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <hgroup>
+            <h1>Painel de Controle 🐾</h1>
+            <h2>Alimentador de Pet IoT</h2>
+        </hgroup>
+
+        <article>
+            <header><strong>Status do Dispositivo</strong></header>
+            <p>Nível da Ração: <span id="status-racao">Carregando...</span></p>
+        </article>
+        
+        <article>
+            <header><strong>1. Selecione o Porte do Pet</strong></header>
+            <fieldset>
+                <label for="porte-medio">
+                    <input type="radio" id="porte-medio" name="porte" value="Medio">
+                    Porte Médio
+                </label>
+                <label for="porte-pequeno">
+                    <input type="radio" id="porte-pequeno" name="porte" value="Pequeno">
+                    Porte Pequeno
+                </label>
+            </fieldset>
+        </article>
+
+        <div id="area-de-controle">
+            <div id="controles-medio" style="display: none;">
+                <article>
+                    <header><strong>2. Controles para Porte Médio</strong></header>
+                    <button id="btn-alimentar-medio">Alimentar (Completo)</button>
+                    <button id="btn-servo1-medio">Acionar Comporta 1</button>
+                    <button id="btn-servo2-medio">Acionar Comporta 2</button>
+                </article>
+            </div>
+
+            <div id="controles-pequeno" style="display: none;">
+                <article>
+                    <header><strong>2. Controles para Porte Pequeno</strong></header>
+                    <button id="btn-alimentar-pequeno">Alimentar (Completo)</button>
+                    <button id="btn-servo1-pequeno">Acionar Comporta 1</button>
+                    <button id="btn-servo2-pequeno">Acionar Comporta 2</button>
+                </article>
+            </div>
+
+            <div style="display: flex; align-items: center; margin-top: 1rem;">
+                <p id="feedback-message" style="margin: 0;"></p>
+                <div id="loader" class="loader"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ==========================================================
+        // --- SEUS DADOS (já preenchidos) ---
+        // ==========================================================
+        const USERNAME = "amaralmatheus";
+        const DEVICE_ID = "esp32";
+        const AUTHORIZATION_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhbGltZW50YWRvciIsInN2ciI6InVzLWVhc3QuYXdzLnRoaW5nZXIuaW8iLCJ1c3IiOiJhbWFyYWxtYXRoZXVzIn0.adrfiWcfysl91wF-C14_DvWGfENii1e7KMtd5Pabf_k";
+        // ==========================================================
+
+        // --- ELEMENTOS DA PÁGINA ---
+        const statusElement = document.getElementById('status-racao');
+        const feedbackElement = document.getElementById('feedback-message');
+        const loaderElement = document.getElementById('loader');
+        const controlesMedio = document.getElementById('controles-medio');
+        const controlesPequeno = document.getElementById('controles-pequeno');
+
+        // --- FUNÇÕES DA API ---
+        async function callResource(resourceName) {
+            const url = `https://api.thinger.io/v2/users/${USERNAME}/devices/${DEVICE_ID}/${resourceName}`;
+            feedbackElement.textContent = `Enviando comando '${resourceName}'...`;
+            loaderElement.style.display = 'inline-block';
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${AUTHORIZATION_TOKEN}`
+                    },
+                    body: JSON.stringify({})
+                });
+                if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
+                feedbackElement.textContent = `Comando '${resourceName}' enviado com sucesso!`;
+            } catch (error) {
+                feedbackElement.textContent = `Falha ao enviar comando: ${error.message}`;
+            } finally {
+                loaderElement.style.display = 'none';
+                setTimeout(() => { feedbackElement.textContent = ''; }, 4000);
+            }
+        }
+
+        async function getStatus() {
+            const url = `https://api.thinger.io/v2/users/${USERNAME}/devices/${DEVICE_ID}/status_racao`;
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${AUTHORIZATION_TOKEN}` }
+                });
+                if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
+                const data = await response.json();
+                statusElement.textContent = data.out;
+            } catch (error) {
+                statusElement.textContent = "Erro ao carregar";
+            }
+        }
+
+        // --- LÓGICA DA PÁGINA ---
+
+        // Mostra/esconde os painéis de controle quando o porte é selecionado
+        document.querySelectorAll('input[name="porte"]').forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                const porteSelecionado = event.target.value;
+                if (porteSelecionado === 'Medio') {
+                    controlesMedio.style.display = 'block';
+                    controlesPequeno.style.display = 'none';
+                } else if (porteSelecionado === 'Pequeno') {
+                    controlesMedio.style.display = 'none';
+                    controlesPequeno.style.display = 'block';
+                }
+            });
+        });
+
+        // Adiciona os eventos de clique aos botões de PORTE MÉDIO
+        document.getElementById('btn-alimentar-medio').addEventListener('click', () => callResource('alimentarMedio'));
+        document.getElementById('btn-servo1-medio').addEventListener('click', () => callResource('acionar_servo1_medio'));
+        document.getElementById('btn-servo2-medio').addEventListener('click', () => callResource('acionar_servo2_medio'));
+        
+        // Adiciona os eventos de clique aos botões de PORTE PEQUENO
+        document.getElementById('btn-alimentar-pequeno').addEventListener('click', () => callResource('alimentarPequeno'));
+        document.getElementById('btn-servo1-pequeno').addEventListener('click', () => callResource('acionar_servo1_pequeno'));
+        document.getElementById('btn-servo2-pequeno').addEventListener('click', () => callResource('acionar_servo2_pequeno'));
+
+        // Carrega o status inicial e atualiza a cada 30 segundos
+        window.onload = () => {
+            getStatus();
+            setInterval(getStatus, 30000);
+        };
+    </script>
+</body>
+</html>
